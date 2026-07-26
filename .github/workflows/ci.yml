@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install React (optional peer, needed for the react entry point)
+        run: npm install --no-save --no-package-lock react@18
+
+      - name: Syntax check every source file
+        run: |
+          find src react edge examples test -name '*.js' -print0 \
+            | xargs -0 -n1 node --check
+
+      - name: Test
+        run: npm test
+
+      - name: Check subpath exports resolve
+        run: |
+          node -e "Promise.all([
+            import('./src/index.js'),
+            import('./src/seed.js'),
+            import('./edge/ably-token.js'),
+            import('./react/index.js')
+          ]).then(() => console.log('all entry points loaded'))"
+
+      - name: Pack
+        run: npm pack --dry-run

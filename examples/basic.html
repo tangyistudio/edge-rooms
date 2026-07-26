@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>edge-rooms — one seed, many devices</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --line: color-mix(in srgb, currentColor 18%, transparent);
+        --muted: color-mix(in srgb, currentColor 60%, transparent);
+      }
+      body {
+        font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 2rem 1.25rem 4rem;
+        max-width: 62rem;
+        margin-inline: auto;
+      }
+      h1 { font-size: 1.35rem; margin: 0 0 .35rem; }
+      p.lede { color: var(--muted); margin: 0 0 1.5rem; max-width: 46rem; }
+      .controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1.5rem; }
+      button, input {
+        font: inherit;
+        padding: .4rem .7rem;
+        border: 1px solid var(--line);
+        border-radius: .4rem;
+        background: transparent;
+        color: inherit;
+      }
+      button { cursor: pointer; }
+      .devices { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+      .device { border: 1px solid var(--line); border-radius: .6rem; padding: .9rem 1rem; }
+      .device h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 .5rem; color: var(--muted); }
+      ol { margin: 0; padding-left: 1.3rem; }
+      li { padding: .1rem 0; }
+      .meta { margin-top: .6rem; font-size: .8rem; color: var(--muted); }
+      .log { margin-top: 1.75rem; border-top: 1px solid var(--line); padding-top: .75rem; font-size: .8rem; color: var(--muted); }
+      .log div { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <h1>One seed, many devices</h1>
+    <p class="lede">
+      Four simulated devices join the same room through an in-memory stub adapter — no account,
+      no network, no build step. When the host starts a round it publishes
+      <code>{ room, round }</code> and nothing else. Every device derives the same order from
+      that seed locally. Compare the lists: they always match, and they change every round.
+    </p>
+
+    <div class="controls">
+      <label>room <input id="room" value="R4TQ" size="8" /></label>
+      <button id="next">Host: start next round</button>
+      <button id="reset">Reset</button>
+      <span class="meta" id="status">idle</span>
+    </div>
+
+    <div class="devices" id="devices"></div>
+
+    <div class="log">
+      <strong>Wire traffic</strong>
+      <div id="log">(nothing published yet)</div>
+    </div>
+
+    <script type="module">
+      import {
+        createStubAdapter,
+        joinRoom,
+        seededShuffle,
+        makeRoomSeed,
+      } from '../src/index.js';
+
+      // A neutral list of quiz questions. Any array works.
+      const QUESTIONS = [
+        'Which ocean is the largest?',
+        'What gas do plants absorb?',
+        'How many minutes in a day?',
+        'Which planet has the most moons?',
+        'What is the tallest mountain?',
+        'Which metal is liquid at room temperature?',
+      ];
+
+      const DEVICE_NAMES = ['Phone A', 'Phone B', 'Tablet C', 'Laptop D'];
+
+      const devicesEl = document.getElementById('devices');
+      const logEl = document.getElementById('log');
+      const statusEl = document.getElementById('status');
+      const roomInput = document.getElementById('room');
+
+      let session = null;
+      let round = 0;
+
+      function render(card, order, seed) {
+        const list = card.querySelector('ol');
+        list.replaceChildren(
+          ...order.map((question) => {
+            const li = document.createElement('li');
+            li.textContent = question;
+            return li;
+          }),
+        );
+        card.querySelector('.meta').textContent = seed
+          ? `seed "${seed}" — ${order.length} items derived locally`
+          : 'waiting for the host';
+      }
+
+      async function start() {
+        await stop();
+        const roomCode = roomInput.value.trim() || 'R4TQ';
+        round = 0;
+        logEl.textContent = '(nothing published yet)';
+        devicesEl.replaceChildren();
+
+        // One shared bus == one shared realtime service.
+        const bus = { channels: new Map() };
+        const rooms = [];
+
+        for (const [index, name] of DEVICE_NAMES.entries()) {
+          const card = document.createElement('div');
+          card.className = 'device';
+          card.innerHTML =
+            '<h2></h2><ol></ol><div class="meta">waiting for the host</div>';
+          card.querySelector('h2').textContent = name;
+          devicesEl.append(card);
+          render(card, QUESTIONS, null);
+
+          const adapter = createStubAdapter({
+            name: `device-${index}`,
+            clientId: name,
+            bus,
+          });
+
+          const room = await joinRoom({
+            adapter,
+            room: roomCode,
+            clientOptions: { key: `device-${index}` },
+            presenceData: { name },
+            onMessage: (msg) => {
+              if (msg.name !== 'round') return;
+              const seed = makeRoomSeed(msg.data.room, msg.data.round);
+              render(card, seededShuffle(QUESTIONS, seed), seed);
+            },
+          });
+
+          rooms.push({ adapter, room });
+        }
+
+        session = { rooms, roomCode };
+        statusEl.textContent = `${rooms.length} devices in ${rooms[0].room.channelName}`;
+      }
+
+      async function stop() {
+        if (!session) return;
+        for (const { room } of session.rooms) await room.leave();
+        session = null;
+      }
+
+      document.getElementById('next').addEventListener('click', async () => {
+        if (!session) await start();
+        round += 1;
+        const payload = { room: session.roomCode, round };
+        // The host is just the first device; any of them could publish.
+        await session.rooms[0].room.publish('round', payload);
+        logEl.textContent = `publish "round" -> ${JSON.stringify(payload)}  (${
+          JSON.stringify(payload).length
+        } bytes, regardless of list length)`;
+      });
+
+      document.getElementById('reset').addEventListener('click', () => start());
+      roomInput.addEventListener('change', () => start());
+
+      start();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,67 @@
+{
+  "name": "edge-rooms",
+  "version": "1.0.0",
+  "description": "Realtime multiplayer rooms without a game server: sign realtime tokens in an edge function with WebCrypto, and derive shared state from a seed instead of syncing it.",
+  "type": "module",
+  "sideEffects": false,
+  "license": "MIT",
+  "author": "Tangyi Studio",
+  "homepage": "https://github.com/tangyistudio/edge-rooms#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tangyistudio/edge-rooms.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tangyistudio/edge-rooms/issues"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./seed": "./src/seed.js",
+    "./edge": "./edge/ably-token.js",
+    "./react": "./react/index.js",
+    "./package.json": "./package.json"
+  },
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "files": [
+    "src",
+    "react",
+    "edge",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "realtime",
+    "multiplayer",
+    "rooms",
+    "presence",
+    "seeded-random",
+    "deterministic",
+    "seeded-shuffle",
+    "fisher-yates",
+    "fnv-1a",
+    "webcrypto",
+    "hmac",
+    "token",
+    "edge-functions",
+    "cloudflare-workers",
+    "deno",
+    "ably",
+    "react",
+    "zero-dependency"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
