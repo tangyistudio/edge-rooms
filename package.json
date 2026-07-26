@@ -1,6 +1,6 @@
 {
   "name": "edge-rooms",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Realtime multiplayer rooms without a game server: sign realtime tokens in an edge function with WebCrypto, and derive shared state from a seed instead of syncing it.",
   "type": "module",
   "sideEffects": false,
